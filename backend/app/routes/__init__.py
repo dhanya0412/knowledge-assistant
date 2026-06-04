@@ -1,14 +1,8 @@
-from flask import Flask
-
-from app.config import Config
-from app.routes import register_routes
+from app.routes.health import health_bp
 
 
-def create_app():
-    app = Flask(__name__)
-
-    app.config.from_object(Config)
-
-    register_routes(app)
-
-    return app
+def register_routes(app):
+    app.register_blueprint(
+        health_bp,
+        url_prefix="/api"
+    )

@@ -1,12 +1,13 @@
 from flask import Flask
 
+from app.config import Config
+from app.routes import register_routes
+
+
 def create_app():
     app = Flask(__name__)
 
-    @app.route("/api/health")
-    def health():
-        return {
-            "status": "healthy"
-        }
+    app.config.from_object(Config)
+    register_routes(app)
 
     return app
