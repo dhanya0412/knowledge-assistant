@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify
+import app.database as database
 
 health_bp = Blueprint(
     "health",
@@ -8,6 +9,18 @@ health_bp = Blueprint(
 
 @health_bp.route("/health", methods=["GET"])
 def health():
-    return jsonify({
-        "status": "healthy"
-    }), 200
+
+    try:
+        database.client.admin.command("ping")
+
+        return jsonify({
+            "status": "healthy",
+            "database": "connected"
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e)
+        }), 500
