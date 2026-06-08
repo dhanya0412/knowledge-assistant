@@ -13,3 +13,4 @@ def init_db(app):
     )
 
     db = client["knowledge_db"]
+    db.users.create_index("email", unique=True)
