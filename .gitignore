@@ -3,3 +3,5 @@ __pycache__/
 .env
 uploads/*
 !.gitkeep
+AI-Powered-Engineering-Knowledge-Assistant.md
+high-level-design.md
