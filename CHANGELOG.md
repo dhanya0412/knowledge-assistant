@@ -11,7 +11,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Search APIs
 - NLP pipeline (parsing, keywords, summarization)
 - Frontend integration
-- Automated tests and Docker deployment
+- Docker deployment
+
+## [0.2.1] - 2026-06-08
+
+### Added
+- Auth integration tests (`tests/test_auth.py`) — 9 tests for registration, login, and JWT protection
+- Shared test fixtures (`tests/conftest.py`) with isolated `knowledge_db_test` database
+- `pytest` test runner and `pytest.ini` for import path configuration
+
+### Changed
+- `config.py` — added `MONGO_DB_NAME` environment variable (default: `knowledge_db`)
+- `database.py` — database name now read from config instead of hardcoded
+- `requirements.txt` — added `pytest` and dependencies
+- `.env.example` — documented `MONGO_DB_NAME`
 
 ## [0.2.0] - 2026-06-08
 

@@ -12,5 +12,5 @@ def init_db(app):
         app.config["MONGO_URI"]
     )
 
-    db = client["knowledge_db"]
+    db = client[app.config["MONGO_DB_NAME"]]
     db.users.create_index("email", unique=True)
