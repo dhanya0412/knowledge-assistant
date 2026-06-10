@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token
 
 from app.models.user import user_to_dict
 from app.services.auth_service import AuthError, login_user, register_user
+from app.middleware.auth_middleware import token_required
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -41,3 +42,12 @@ def login():
         "token": token,
         "user": user_to_dict(user),
     }), 200
+
+# TODO: Remove after JWT testing
+
+# @auth_bp.route("/protected", methods=["GET"])
+# @token_required
+# def protected():
+#     return jsonify({
+#         "message": "authenticated"
+#     }), 200

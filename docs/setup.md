@@ -42,3 +42,5 @@ pip install -r backend/requirements.txt
 python backend/run.py
 ```
 
+## Version
+Recommended Python Version: 3.12.x
