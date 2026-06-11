@@ -7,11 +7,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Planned
-- Document upload module
 - Search APIs
 - NLP pipeline (parsing, keywords, summarization)
 - Frontend integration
 - Docker deployment
+
+## [0.3.0] - 2026-06-11
+
+### Added
+- Document upload module
+- Document listing endpoint
+- Document retrieval endpoint
+- Document deletion endpoint
+- Document ownership enforcement
+- File storage in uploads/
+- Document metadata persistence in MongoDB
+- Document integration tests
+
+### Added Schema Fields
+- original_filename
+- filepath
+- processed
+
+### Security
+- User-scoped document access
+- User-scoped document deletion
+
+### Testing
+- Upload endpoint tests
+- Document retrieval tests
+- Document deletion tests
+- Ownership verification tests
 
 ## [0.2.1] - 2026-06-08
 

@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import pytest
 from flask import Blueprint, jsonify
@@ -24,6 +25,9 @@ def test_protected():
 def app():
     application = create_app()
     application.config["TESTING"] = True
+    application.config["UPLOAD_FOLDER"] = os.path.abspath(
+        os.path.join(os.getcwd(), "uploads", "test")
+    )
     application.register_blueprint(test_bp, url_prefix="/api/test")
     yield application
 
@@ -38,8 +42,12 @@ def clean_users(app):
     import app.database as database
 
     database.db.users.delete_many({})
+    database.db.documents.delete_many({})
+    shutil.rmtree(app.config["UPLOAD_FOLDER"], ignore_errors=True)
     yield
     database.db.users.delete_many({})
+    database.db.documents.delete_many({})
+    shutil.rmtree(app.config["UPLOAD_FOLDER"], ignore_errors=True)
 
 
 @pytest.fixture

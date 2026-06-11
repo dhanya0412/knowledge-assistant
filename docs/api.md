@@ -168,3 +168,252 @@ Requests without a valid JWT token will receive:
 }
 ```
 
+# Document Management
+
+All document endpoints require JWT authentication.
+
+### Authorization Header
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## Upload Document
+
+### Endpoint
+
+`POST /api/documents/upload`
+
+### Description
+
+Uploads a document and stores its metadata in MongoDB.
+
+### Authentication
+
+Required
+
+### Request Format
+
+`multipart/form-data`
+
+### Form Fields
+
+| Field | Type   | Required | Description                |
+| ----- | ------ | -------- | -------------------------- |
+| file  | File   | Yes      | PDF, DOCX, or TXT document |
+| title | String | No       | Custom document title      |
+| tags  | String | No       | Comma-separated tags       |
+
+### Example Request
+
+```text
+file: test.txt
+title: Test Document
+tags: test,sample
+```
+
+### Success Response
+
+**Status Code:** `201 Created`
+
+```json
+{
+  "message": "document uploaded successfully",
+  "document": {
+    "id": "62a2f647502464b019871b61",
+    "title": "Test Document",
+    "original_filename": "test.txt",
+    "filename": "7f17d299be204729a11fb0bf33e0c9f1.txt",
+    "file_size": 25,
+    "content_type": "text/plain",
+    "uploaded_by": "62948aec7e96386d3bd6885",
+    "uploaded_at": "2026-06-11T17:54:15.455Z",
+    "tags": [],
+    "keywords": [],
+    "summary": "",
+    "processed": false
+  }
+}
+```
+
+### Error Responses
+
+#### Missing File
+
+**Status Code:** `400 Bad Request`
+
+```json
+{
+  "error": "file is required"
+}
+```
+
+#### Unsupported File Type
+
+**Status Code:** `400 Bad Request`
+
+```json
+{
+  "error": "file type is not allowed"
+}
+```
+
+#### Unauthorized
+
+**Status Code:** `401 Unauthorized`
+
+```json
+{
+  "error": "authentication required"
+}
+```
+
+---
+
+## List Documents
+
+### Endpoint
+
+`GET /api/documents`
+
+### Description
+
+Returns all documents uploaded by the authenticated user.
+
+### Authentication
+
+Required
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "documents": [
+    {
+      "id": "62a2f647502464b019871b61",
+      "title": "Test Document",
+      "original_filename": "test.txt",
+      "file_size": 25,
+      "content_type": "text/plain",
+      "uploaded_at": "2026-06-11T17:54:15.455Z",
+      "processed": false
+    }
+  ]
+}
+```
+
+### Error Response
+
+#### Unauthorized
+
+**Status Code:** `401 Unauthorized`
+
+```json
+{
+  "error": "authentication required"
+}
+```
+
+---
+
+## Get Document
+
+### Endpoint
+
+`GET /api/documents/<document_id>`
+
+### Description
+
+Returns metadata for a specific document owned by the authenticated user.
+
+### Authentication
+
+Required
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "document": {
+    "id": "62a2f647502464b019871b61",
+    "title": "Test Document",
+    "original_filename": "test.txt",
+    "filename": "7f17d299be204729a11fb0bf33e0c9f1.txt",
+    "file_size": 25,
+    "content_type": "text/plain",
+    "uploaded_at": "2026-06-11T17:54:15.455Z",
+    "tags": [],
+    "text_content": "",
+    "keywords": [],
+    "summary": "",
+    "processed": false
+  }
+}
+```
+
+### Error Response
+
+#### Document Not Found
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "error": "document not found"
+}
+```
+
+---
+
+## Delete Document
+
+### Endpoint
+
+`DELETE /api/documents/<document_id>`
+
+### Description
+
+Deletes a document and its associated uploaded file.
+
+### Authentication
+
+Required
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "message": "document deleted successfully"
+}
+```
+
+### Error Response
+
+#### Document Not Found
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "error": "document not found"
+}
+```
+
+#### Unauthorized
+
+**Status Code:** `401 Unauthorized`
+
+```json
+{
+  "error": "authentication required"
+}
+```
+
