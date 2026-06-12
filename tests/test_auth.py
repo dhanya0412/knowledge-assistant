@@ -90,6 +90,24 @@ class TestJWTProtection:
 
         assert response.status_code == 401
 
+    def test_protected_with_expired_token(self, client, app):
+        from datetime import timedelta
+
+        from flask_jwt_extended import create_access_token
+
+        with app.app_context():
+            expired_token = create_access_token(
+                identity="fake-user-id",
+                expires_delta=timedelta(seconds=-1),
+            )
+
+        response = client.get(
+            "/api/test/protected",
+            headers={"Authorization": f"Bearer {expired_token}"},
+        )
+
+        assert response.status_code == 401
+
     def test_protected_with_invalid_token(self, client, app):
         from datetime import timedelta
 
