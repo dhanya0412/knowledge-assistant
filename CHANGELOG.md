@@ -8,9 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Planned
 - Search APIs
-- NLP pipeline (parsing, keywords, summarization)
 - Frontend integration
 - Docker deployment
+
+## [0.4.0] - 2026-06-16
+
+### Added
+
+- Document parser service
+  - TXT extraction
+  - PDF extraction
+  - DOCX extraction
+
+- Text preprocessing service
+  - whitespace normalization
+  - tokenization
+
+- TF-IDF keyword extraction service
+
+- Extractive summarization service
+
+### Testing
+
+- Added NLP test suite
+- Parser tests
+- Preprocessor tests
+- Keyword extraction tests
+- Summarization tests
 
 ## [0.3.0] - 2026-06-11
 
