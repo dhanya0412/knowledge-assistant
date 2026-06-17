@@ -188,7 +188,7 @@ Authorization: Bearer <jwt_token>
 
 ### Description
 
-Uploads a document and stores its metadata in MongoDB.
+Uploads a document, processes it immediately, and stores the fully processed document in MongoDB.
 
 ### Authentication
 
@@ -231,9 +231,9 @@ tags: test,sample
     "uploaded_by": "62948aec7e96386d3bd6885",
     "uploaded_at": "2026-06-11T17:54:15.455Z",
     "tags": [],
-    "keywords": [],
-    "summary": "",
-    "processed": false
+    "keywords": ["pressure", "pump", "maintenance"],
+    "summary": "Pump maintenance requires pressure inspection.",
+    "processed": true
   }
 }
 ```
@@ -257,6 +257,16 @@ tags: test,sample
 ```json
 {
   "error": "file type is not allowed"
+}
+```
+
+#### No Extractable Text
+
+**Status Code:** `400 Bad Request`
+
+```json
+{
+  "error": "no extractable text found"
 }
 ```
 
@@ -300,7 +310,7 @@ Required
       "file_size": 25,
       "content_type": "text/plain",
       "uploaded_at": "2026-06-11T17:54:15.455Z",
-      "processed": false
+      "processed": true
     }
   ]
 }
@@ -349,10 +359,10 @@ Required
     "content_type": "text/plain",
     "uploaded_at": "2026-06-11T17:54:15.455Z",
     "tags": [],
-    "text_content": "",
-    "keywords": [],
-    "summary": "",
-    "processed": false
+    "text_content": "Pump maintenance requires pressure inspection.",
+    "keywords": ["pressure", "pump", "maintenance"],
+    "summary": "Pump maintenance requires pressure inspection.",
+    "processed": true
   }
 }
 ```
@@ -366,6 +376,55 @@ Required
 ```json
 {
   "error": "document not found"
+}
+```
+
+---
+
+## Get Document Summary
+
+### Endpoint
+
+`GET /api/documents/<document_id>/summary`
+
+### Description
+
+Returns the generated summary for a specific document owned by the authenticated user.
+
+### Authentication
+
+Required
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "id": "62a2f647502464b019871b61",
+  "summary": "Pump maintenance requires pressure inspection."
+}
+```
+
+### Error Response
+
+#### Document Not Found
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "error": "document not found"
+}
+```
+
+#### Unauthorized
+
+**Status Code:** `401 Unauthorized`
+
+```json
+{
+  "error": "authentication required"
 }
 ```
 

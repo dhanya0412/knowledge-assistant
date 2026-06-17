@@ -5,6 +5,7 @@ from app.services.document_service import (
     DocumentError,
     delete_document,
     get_document,
+    get_document_summary,
     list_documents,
     upload_document,
 )
@@ -52,6 +53,17 @@ def get_user_document(document_id):
         return jsonify({"error": exc.message}), exc.status_code
 
     return jsonify({"document": document}), 200
+
+
+@documents_bp.route("/<document_id>/summary", methods=["GET"])
+@token_required
+def get_user_document_summary(document_id):
+    try:
+        summary = get_document_summary(g.user_id, document_id)
+    except DocumentError as exc:
+        return jsonify({"error": exc.message}), exc.status_code
+
+    return jsonify(summary), 200
 
 
 @documents_bp.route("/<document_id>", methods=["DELETE"])

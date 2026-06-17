@@ -173,6 +173,21 @@ def get_document(user_id, document_id):
     return document_to_dict(document)
 
 
+def get_document_summary(user_id, document_id):
+    document = database.db.documents.find_one({
+        "_id": _object_id(document_id),
+        "uploaded_by": ObjectId(user_id),
+    })
+
+    if not document:
+        raise DocumentError("document not found", status_code=404)
+
+    return {
+        "id": str(document["_id"]),
+        "summary": document.get("summary", ""),
+    }
+
+
 def delete_document(user_id, document_id):
     document = database.db.documents.find_one({
         "_id": _object_id(document_id),

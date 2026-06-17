@@ -5,3 +5,5 @@ uploads/*
 !.gitkeep
 AI-Powered-Engineering-Knowledge-Assistant.md
 high-level-design.md
+pytest-run-tmp/
+pytest-run-tmp-full/

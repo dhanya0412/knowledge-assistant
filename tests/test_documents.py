@@ -173,6 +173,72 @@ class TestDocumentDetail:
         assert response.get_json()["error"] == "document not found"
 
 
+class TestDocumentSummary:
+    def test_get_document_summary_success(self, client, auth_headers):
+        upload_response = upload_file(client, auth_headers, title="Pump Manual")
+        uploaded_document = upload_response.get_json()["document"]
+
+        response = client.get(
+            f"/api/documents/{uploaded_document['id']}/summary",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["id"] == uploaded_document["id"]
+        assert data["summary"] == uploaded_document["summary"]
+        assert "text_content" not in data
+        assert "filepath" not in data
+
+    def test_get_document_summary_requires_authentication(self, client, auth_headers):
+        upload_response = upload_file(client, auth_headers)
+        document_id = upload_response.get_json()["document"]["id"]
+
+        response = client.get(f"/api/documents/{document_id}/summary")
+
+        assert response.status_code == 401
+
+    def test_get_document_summary_returns_not_found_for_unknown_document(self, client, auth_headers):
+        response = client.get(
+            "/api/documents/000000000000000000000000/summary",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 404
+        assert response.get_json()["error"] == "document not found"
+
+    def test_get_document_summary_returns_not_found_for_other_user_document(self, client, auth_headers):
+        upload_response = upload_file(client, auth_headers)
+        document_id = upload_response.get_json()["document"]["id"]
+
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "other@example.com",
+                "password": "password123",
+                "name": "Other User",
+            },
+        )
+        login_response = client.post(
+            "/api/auth/login",
+            json={
+                "email": "other@example.com",
+                "password": "password123",
+            },
+        )
+        other_headers = {
+            "Authorization": f"Bearer {login_response.get_json()['token']}"
+        }
+
+        response = client.get(
+            f"/api/documents/{document_id}/summary",
+            headers=other_headers,
+        )
+
+        assert response.status_code == 404
+        assert response.get_json()["error"] == "document not found"
+
+
 class TestDocumentDelete:
     def test_delete_document_success(self, client, auth_headers):
         upload_response = upload_file(client, auth_headers)
