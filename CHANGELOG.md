@@ -11,6 +11,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Frontend integration
 - Docker deployment
 
+## [0.5.1] - 2026-06-17
+
+### Added
+- GET /api/documents/<id>/summary endpoint
+- Summary and keyword retrieval API
+- Summary endpoint integration tests
+- API documentation updates
+
+## [0.5.0] - 2026-06-17
+
+### Added
+
+#### Automated Document Processing
+
+* Integrated NLP pipeline into document upload workflow
+* Automatic text extraction during upload
+* Automatic keyword generation during upload
+* Automatic summary generation during upload
+
+### Changed
+
+#### Document Upload
+
+* Documents are now processed immediately after upload
+* Upload requests now trigger:
+
+  * Document parsing
+  * Text preprocessing
+  * TF-IDF keyword extraction
+  * Extractive summarization
+* Successfully processed documents are stored with:
+
+  * `text_content`
+  * `keywords`
+  * `summary`
+  * `processed = true`
+
+#### Database Storage
+
+* MongoDB now stores processed document content instead of placeholder NLP fields
+* Processed metadata is generated before document insertion
+
+### Improved
+
+* Added cleanup of uploaded files when NLP processing fails
+* Prevented insertion of partially processed documents
+* Improved validation for empty and non-processable documents
+* Improved upload reliability through end-to-end processing checks
+
+### Testing
+
+* Updated document upload integration tests
+* Added validation for processed document uploads
+* Added validation for cleaned text persistence
+* Added validation for empty document rejection
+* Added validation for upload cleanup after processing failures
+
+### Verification
+
+* Verified end-to-end upload workflow using Postman
+* Verified processed document storage using MongoDB Compass
+* Verified automatic population of summaries and keywords after upload
+
+
 ## [0.4.0] - 2026-06-16
 
 ### Added
