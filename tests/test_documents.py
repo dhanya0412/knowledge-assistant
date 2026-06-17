@@ -1,9 +1,16 @@
+import os
 from io import BytesIO
 
 import app.database as database
 
 
-def upload_file(client, auth_headers, filename="manual.txt", content=b"hello", **fields):
+DEFAULT_CONTENT = (
+    b"Pump maintenance requires pressure inspection. "
+    b"Seal pressure and pump vibration should be monitored weekly."
+)
+
+
+def upload_file(client, auth_headers, filename="manual.txt", content=DEFAULT_CONTENT, **fields):
     data = {
         "file": (BytesIO(content), filename),
         **fields,
@@ -35,9 +42,49 @@ class TestDocumentUpload:
         assert document["filename"] != "manual.txt"
         assert document["filename"].endswith(".txt")
         assert document["tags"] == ["pump", "manual", "engineering"]
-        assert document["processed"] is False
+        assert document["processed"] is True
+        assert document["text_content"] == DEFAULT_CONTENT.decode("utf-8")
+        assert document["keywords"]
+        assert document["summary"]
         assert "filepath" in document
         assert database.db.documents.count_documents({}) == 1
+
+        stored_document = database.db.documents.find_one({})
+        assert stored_document["processed"] is True
+        assert stored_document["text_content"] == document["text_content"]
+        assert stored_document["keywords"] == document["keywords"]
+        assert stored_document["summary"] == document["summary"]
+
+    def test_upload_cleans_text_before_insert(self, client, auth_headers):
+        response = upload_file(
+            client,
+            auth_headers,
+            content=(
+                b" Pump   manual\r\n\r\n\r\n"
+                b"Check\tpressure before startup. "
+                b"Pump pressure requires inspection."
+            ),
+        )
+
+        assert response.status_code == 201
+        document = response.get_json()["document"]
+        assert document["text_content"] == (
+            "Pump manual\n\n"
+            "Check pressure before startup. Pump pressure requires inspection."
+        )
+        assert document["processed"] is True
+
+    def test_upload_rejects_empty_document_without_insert(self, client, auth_headers, app):
+        response = upload_file(
+            client,
+            auth_headers,
+            content=b"   \n\t\n",
+        )
+
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "no extractable text found"
+        assert database.db.documents.count_documents({}) == 0
+        assert os.listdir(app.config["UPLOAD_FOLDER"]) == []
 
     def test_upload_requires_authentication(self, client):
         response = client.post(

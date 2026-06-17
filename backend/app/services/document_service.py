@@ -11,9 +11,18 @@ from app.models.document import (
     create_document_document,
     document_to_dict,
     get_file_extension,
-    parse_tags,
     validate_document_upload,
 )
+from app.services.keyword_extractor import extract_keywords
+from app.services.parser import (
+    EmptyDocumentError,
+    MissingFileError,
+    ParserError,
+    UnsupportedFileTypeError,
+    extract_text,
+)
+from app.services.preprocessor import clean_text
+from app.services.summarizer import generate_summary
 
 
 class DocumentError(Exception):
@@ -53,6 +62,39 @@ def _stored_filename(original_filename):
     return f"{uuid4().hex}.{extension}"
 
 
+def _process_document(filepath, original_filename):
+    try:
+        raw_text = extract_text(filepath, filename=original_filename)
+        text_content = clean_text(raw_text)
+        keywords = extract_keywords(text_content)
+        summary = generate_summary(text_content)
+    except EmptyDocumentError as exc:
+        raise DocumentError("no extractable text found") from exc
+    except UnsupportedFileTypeError as exc:
+        raise DocumentError("file type is not supported") from exc
+    except MissingFileError as exc:
+        raise DocumentError(
+            "uploaded file could not be processed",
+            status_code=500,
+        ) from exc
+    except ValueError as exc:
+        raise DocumentError("document could not be processed") from exc
+    except RuntimeError as exc:
+        raise DocumentError(
+            "document processing service unavailable",
+            status_code=500,
+        ) from exc
+    except ParserError as exc:
+        raise DocumentError("document could not be processed") from exc
+
+    return {
+        "text_content": text_content,
+        "keywords": keywords,
+        "summary": summary,
+        "processed": True,
+    }
+
+
 def upload_document(user_id, file, title=None, tags=None):
     errors = validate_document_upload(file)
     if errors:
@@ -67,7 +109,25 @@ def upload_document(user_id, file, title=None, tags=None):
     file_size = _file_size(file)
     file.save(filepath)
 
-    document_title = str(title).strip() if title and str(title).strip() else os.path.splitext(original_filename)[0]
+    try:
+        processed_fields = _process_document(filepath, original_filename)
+    except DocumentError:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise
+    except Exception as exc:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise DocumentError(
+            "document could not be processed",
+            status_code=500,
+        ) from exc
+
+    document_title = (
+        str(title).strip()
+        if title and str(title).strip()
+        else os.path.splitext(original_filename)[0]
+    )
 
     document = create_document_document(
         title=document_title,
@@ -79,6 +139,7 @@ def upload_document(user_id, file, title=None, tags=None):
         content_type=file.content_type,
         tags=tags,
     )
+    document.update(processed_fields)
 
     result = database.db.documents.insert_one(document)
     document["_id"] = result.inserted_id
