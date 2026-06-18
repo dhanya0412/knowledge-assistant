@@ -168,6 +168,127 @@ Requests without a valid JWT token will receive:
 }
 ```
 
+---
+
+# Search
+
+Search endpoints require JWT authentication.
+
+### Authorization Header
+
+```http
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## Search Documents
+
+### Endpoint
+
+`GET /api/search`
+
+### Description
+
+Searches the entire processed document corpus using TF-IDF vectorization and cosine similarity.
+
+Search is corpus-wide. It is not limited to documents uploaded by the authenticated user. Only documents with `processed = true` and non-empty extracted text are searchable.
+
+The search ranking uses document title, extracted keywords, and extracted text. The response does not include `filepath` or full `text_content`.
+
+### Authentication
+
+Required
+
+### Query Parameters
+
+| Parameter | Type   | Required | Description                                 |
+| --------- | ------ | -------- | ------------------------------------------- |
+| q         | String | Yes      | Search query                                |
+| limit     | Number | No       | Maximum number of results. Defaults to `5`. |
+
+### Example Request
+
+```http
+GET /api/search?q=pump%20seal&limit=5
+```
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "query": "pump seal",
+  "count": 1,
+  "results": [
+    {
+      "id": "62a2f647502464b019871b61",
+      "title": "Pump Maintenance Manual",
+      "keywords": ["pump", "seal", "pressure"],
+      "uploaded_by": "62948aec7e96386d3bd6885",
+      "uploaded_by_name": "Dhanya",
+      "uploaded_at": "2026-06-11T17:54:15.455Z",
+      "score": 0.8123
+    }
+  ]
+}
+```
+
+### Empty Results Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "query": "compressor",
+  "count": 0,
+  "results": []
+}
+```
+
+### Error Responses
+
+#### Missing or Empty Query
+
+**Status Code:** `400 Bad Request`
+
+```json
+{
+  "error": "search query is required"
+}
+```
+
+#### Invalid Limit
+
+**Status Code:** `400 Bad Request`
+
+```json
+{
+  "error": "limit must be a positive integer"
+}
+```
+
+#### Unauthorized
+
+**Status Code:** `401 Unauthorized`
+
+```json
+{
+  "error": "authentication required"
+}
+```
+
+#### Search Service Unavailable
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "error": "search service unavailable"
+}
+```
+
 # Document Management
 
 All document endpoints require JWT authentication.
@@ -389,7 +510,9 @@ Required
 
 ### Description
 
-Returns the generated summary for a specific document owned by the authenticated user.
+Returns the generated summary and keywords for any processed document in the corpus.
+
+This endpoint is corpus-wide for authenticated users. It does not expose the full extracted text or file path.
 
 ### Authentication
 
@@ -402,7 +525,8 @@ Required
 ```json
 {
   "id": "62a2f647502464b019871b61",
-  "summary": "Pump maintenance requires pressure inspection."
+  "summary": "Pump maintenance requires pressure inspection.",
+  "keywords": ["pressure", "pump", "maintenance"]
 }
 ```
 

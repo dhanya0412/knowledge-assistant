@@ -7,9 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Planned
-- Search APIs
 - Frontend integration
 - Docker deployment
+
+## [0.6.0] - 2026-06-19
+
+### Added
+- Corpus-wide `GET /api/search` endpoint for searching processed documents
+- TF-IDF and cosine-similarity ranking over document title, keywords, and extracted text
+- Search result responses with title, keywords, uploader, upload timestamp, and relevance score
+- Search integration tests covering authentication, ranking, processed-only filtering, corpus-wide access, and response safety
+
+### Changed
+- `GET /api/documents/<id>/summary` is corpus-wide for authenticated users and returns generated keywords with the summary
+
 
 ## [0.5.1] - 2026-06-17
 
