@@ -185,6 +185,7 @@ def get_document_summary(user_id, document_id):
     return {
         "id": str(document["_id"]),
         "summary": document.get("summary", ""),
+        "keywords": document.get("keywords", []),
     }
 
 
