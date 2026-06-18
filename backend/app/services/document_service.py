@@ -176,7 +176,7 @@ def get_document(user_id, document_id):
 def get_document_summary(user_id, document_id):
     document = database.db.documents.find_one({
         "_id": _object_id(document_id),
-        "uploaded_by": ObjectId(user_id),
+        "processed": True,
     })
 
     if not document:

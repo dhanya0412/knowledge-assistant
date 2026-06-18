@@ -1,5 +1,6 @@
 import os
 from io import BytesIO
+from urllib import response
 
 import app.database as database
 
@@ -207,7 +208,7 @@ class TestDocumentSummary:
         assert response.status_code == 404
         assert response.get_json()["error"] == "document not found"
 
-    def test_get_document_summary_returns_not_found_for_other_user_document(self, client, auth_headers):
+    def test_get_document_summary_allows_access_to_other_user_document(self, client, auth_headers):
         upload_response = upload_file(client, auth_headers)
         document_id = upload_response.get_json()["document"]["id"]
 
@@ -235,8 +236,14 @@ class TestDocumentSummary:
             headers=other_headers,
         )
 
-        assert response.status_code == 404
-        assert response.get_json()["error"] == "document not found"
+        assert response.status_code == 200
+
+        data = response.get_json()
+
+        assert data["id"] == document_id
+        assert data["summary"]
+        assert "text_content" not in data
+        assert "filepath" not in data
 
 
 class TestDocumentDelete:
