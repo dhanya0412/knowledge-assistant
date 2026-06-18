@@ -3,7 +3,7 @@ import re
 from app.services.preprocessor import clean_text
 
 
-def generate_summary(text, max_sentences=3):
+def generate_summary(text, max_sentences=2):
     cleaned_text = clean_text(text)
     if not cleaned_text:
         raise ValueError("text is required for summarization")
