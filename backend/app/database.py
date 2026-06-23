@@ -14,3 +14,4 @@ def init_db(app):
 
     db = client[app.config["MONGO_DB_NAME"]]
     db.users.create_index("email", unique=True)
+    db.documents.create_index([("text_content", "text")])

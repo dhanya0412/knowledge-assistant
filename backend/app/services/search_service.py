@@ -1,6 +1,8 @@
 from bson import ObjectId
+from pymongo.errors import PyMongoError
 
 import app.database as database
+from app.services.retrieval import Chunk, rank_chunks
 
 
 DEFAULT_LIMIT = 5
@@ -22,19 +24,30 @@ def search_documents(query, limit=DEFAULT_LIMIT):
     if not documents:
         return _empty_response(normalized_query)
 
-    ranked_documents = _rank_documents(
-        normalized_query,
-        documents,
-        normalized_limit,
-    )
+    ranked_chunks = _rank_chunks(normalized_query, documents, normalized_limit)
+    ranked_document_ids = {
+        ObjectId(chunk.document_id)
+        for chunk, _score in ranked_chunks
+        if ObjectId.is_valid(chunk.document_id)
+    }
+    ranked_documents = [
+        document
+        for document in documents
+        if document["_id"] in ranked_document_ids
+    ]
     uploaders = _fetch_uploaders(ranked_documents)
+    documents_by_id = {
+        str(document["_id"]): document
+        for document in documents
+    }
 
     return {
         "query": normalized_query,
-        "count": len(ranked_documents),
-        "results": [
-            _result_to_dict(document, score, uploaders)
-            for document, score in ranked_documents
+        "count": len(ranked_chunks),
+        "success": True,
+        "data": [
+            _chunk_result_to_data(chunk, score)
+            for chunk, score in ranked_chunks
         ],
     }
 
@@ -62,83 +75,79 @@ def _normalize_limit(limit):
 
 
 def _fetch_searchable_documents():
-    return list(database.db.documents.find(
-        {
-            "processed": True,
-            "text_content": {"$exists": True, "$ne": ""},
-        },
-        {
-            "title": 1,
-            "keywords": 1,
-            "uploaded_by": 1,
-            "uploaded_at": 1,
-            "text_content": 1,
-        },
-    ))
-
-
-def _rank_documents(query, documents, limit):
     try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-    except ImportError as exc:
-        raise SearchError("search service unavailable", status_code=500) from exc
+        return list(database.db.documents.find(
+            {
+                "processed": True,
+                "$or": [
+                    {"status": "processed"},
+                    {"status": {"$exists": False}},
+                ],
+                "text_content": {"$exists": True, "$ne": ""},
+            },
+            {
+                "title": 1,
+                "filename": 1,
+                "original_filename": 1,
+                "keywords": 1,
+                "uploaded_by": 1,
+                "uploaded_at": 1,
+                "text_content": 1,
+                "chunks": 1,
+            },
+        ))
+    except PyMongoError as exc:
+        raise SearchError(
+            "documents could not be loaded",
+            status_code=500,
+        ) from exc
 
-    search_texts = [_build_search_text(document) for document in documents]
-    vectorizer = TfidfVectorizer(
-        stop_words="english",
-        ngram_range=(1, 2),
-        lowercase=True,
-    )
 
+def _rank_chunks(query, documents, limit):
     try:
-        document_matrix = vectorizer.fit_transform(search_texts)
-        query_vector = vectorizer.transform([query])
-    except ValueError as exc:
-        if "empty vocabulary" in str(exc):
-            return []
-        raise SearchError("search failed", status_code=500) from exc
-
-    scores = cosine_similarity(query_vector, document_matrix).flatten()
-    ranked = sorted(
-        zip(documents, scores),
-        key=lambda item: (-item[1], str(item[0].get("_id"))),
-    )
-
-    return [
-        (document, float(score))
-        for document, score in ranked[:limit]
-        if score > 0
-    ]
+        return rank_chunks(query, _chunks_from_stored_documents(documents), limit)
+    except RuntimeError as exc:
+        message = str(exc)
+        status_code = 500
+        if message not in {"search failed", "search service unavailable"}:
+            message = "search failed"
+        raise SearchError(message, status_code=status_code) from exc
 
 
-def _build_search_text(document):
-    title = document.get("title", "")
-    keywords = " ".join(document.get("keywords", []))
-    text_content = document.get("text_content", "")
-
-    return " ".join([
-        title,
-        title,
-        keywords,
-        keywords,
-        text_content,
-    ])
+def _chunks_from_stored_documents(documents):
+    chunks = []
+    for document in documents:
+        document_id = str(document["_id"])
+        filename = document.get("original_filename") or document.get("filename", "")
+        for stored_chunk in document.get("chunks", []):
+            chunks.append(Chunk(
+                document_id=document_id,
+                filename=filename,
+                text=stored_chunk["text"],
+                chunk_id=stored_chunk["chunk_id"],
+            ))
+    return chunks
 
 
 def _fetch_uploaders(ranked_documents):
     uploader_ids = {
         document.get("uploaded_by")
-        for document, _score in ranked_documents
+        for document in ranked_documents
         if isinstance(document.get("uploaded_by"), ObjectId)
     }
     if not uploader_ids:
         return {}
 
-    users = database.db.users.find(
-        {"_id": {"$in": list(uploader_ids)}},
-        {"name": 1, "email": 1},
-    )
+    try:
+        users = database.db.users.find(
+            {"_id": {"$in": list(uploader_ids)}},
+            {"name": 1, "email": 1},
+        )
+    except PyMongoError as exc:
+        raise SearchError(
+            "users could not be loaded",
+            status_code=500,
+        ) from exc
 
     return {
         user["_id"]: user.get("name") or user.get("email")
@@ -146,18 +155,36 @@ def _fetch_uploaders(ranked_documents):
     }
 
 
-def _result_to_dict(document, score, uploaders):
+def _result_to_dict(document, chunk, score, uploaders):
+    if not document:
+        return _chunk_result_to_data(chunk, score)
+
     uploaded_by = document.get("uploaded_by")
     uploaded_at = document.get("uploaded_at")
 
     return {
         "id": str(document["_id"]),
+        "document_id": str(document["_id"]),
         "title": document.get("title", ""),
+        "filename": chunk.filename,
+        "matched_chunk": chunk.text,
+        "chunk_id": chunk.chunk_id,
         "keywords": document.get("keywords", []),
         "uploaded_by": str(uploaded_by),
         "uploaded_by_name": uploaders.get(uploaded_by),
         "uploaded_at": uploaded_at.isoformat() if uploaded_at else None,
         "score": round(score, 4),
+        "relevance_score": round(score, 4),
+    }
+
+
+def _chunk_result_to_data(chunk, score):
+    return {
+        "document_id": chunk.document_id,
+        "filename": chunk.filename,
+        "matched_chunk": chunk.text,
+        "chunk_id": chunk.chunk_id,
+        "relevance_score": round(score, 4),
     }
 
 
@@ -165,5 +192,6 @@ def _empty_response(query):
     return {
         "query": query,
         "count": 0,
-        "results": [],
+        "success": True,
+        "data": [],
     }

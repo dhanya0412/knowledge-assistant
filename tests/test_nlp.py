@@ -93,7 +93,7 @@ def test_preprocessor_cleans_whitespace_and_blank_lines():
 
     cleaned = clean_text(raw_text)
 
-    assert cleaned == "Pump manual\n\nCheck pressure."
+    assert cleaned == "Pump manual Check pressure."
 
 
 def test_preprocessor_returns_empty_string_for_blank_text():

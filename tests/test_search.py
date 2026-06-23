@@ -1,6 +1,18 @@
 from datetime import datetime, timezone
 
 import app.database as database
+from app.services.retrieval import chunk_text
+
+
+def _build_stored_chunks(text_content):
+    return [
+        {
+            "chunk_id": index,
+            "text": chunk,
+            "word_count": len(chunk.split()),
+        }
+        for index, chunk in enumerate(chunk_text(text_content), start=1)
+    ]
 
 
 def insert_document(
@@ -22,6 +34,7 @@ def insert_document(
         "uploaded_at": datetime.now(timezone.utc),
         "tags": [],
         "text_content": text_content,
+        "chunks": _build_stored_chunks(text_content),
         "keywords": keywords or [],
         "summary": f"Summary for {title}",
         "processed": processed,
@@ -79,18 +92,21 @@ class TestSearch:
         response = client.get("/api/search?q=pump%20seal", headers=auth_headers)
 
         assert response.status_code == 200
-        data = response.get_json()
-        assert data["query"] == "pump seal"
-        assert data["count"] == 1
+        payload = response.get_json()
+        assert payload["query"] == "pump seal"
+        assert payload["count"] == 1
+        assert payload["success"] is True
 
-        result = data["results"][0]
-        assert result["title"] == "Pump Maintenance Manual"
-        assert result["keywords"] == ["pump", "seal", "pressure"]
-        assert result["uploaded_by"] == str(user["_id"])
-        assert result["uploaded_by_name"] == registered_user["name"]
-        assert result["score"] > 0
+        result = payload["data"][0]
+        assert result["document_id"]
+        assert result["matched_chunk"]
+        assert result["chunk_id"] == 1
+        assert result["filename"] == "pump-maintenance-manual.txt"
+        assert result["relevance_score"] > 0
         assert "filepath" not in result
         assert "text_content" not in result
+        assert "title" not in result
+        assert "keywords" not in result
 
     def test_search_ranks_more_relevant_document_first(
         self,
@@ -121,20 +137,22 @@ class TestSearch:
         )
 
         assert response.status_code == 200
-        results = response.get_json()["results"]
-        assert results[0]["id"] == str(relevant_id)
+        results = response.get_json()["data"]
+        assert results[0]["document_id"] == str(relevant_id)
 
-    def test_search_ranking_uses_weighted_title_and_keywords(
+    def test_search_ranks_chunk_with_stronger_term_overlap_first(
         self,
         client,
         auth_headers,
         registered_user,
     ):
         user = database.db.users.find_one({"email": registered_user["email"]})
-        titled_document_id = insert_document(
+        relevant_id = insert_document(
             title="Pump Manual",
             uploaded_by=user["_id"],
-            text_content="Very short.",
+            text_content=(
+                "Pump manual covers pump maintenance and pump pressure checks."
+            ),
             keywords=["pump", "manual"],
         )
         insert_document(
@@ -150,8 +168,8 @@ class TestSearch:
         )
 
         assert response.status_code == 200
-        results = response.get_json()["results"]
-        assert results[0]["id"] == str(titled_document_id)
+        results = response.get_json()["data"]
+        assert results[0]["document_id"] == str(relevant_id)
 
     def test_search_requires_authentication(self, client):
         response = client.get("/api/search?q=pump")
@@ -190,7 +208,8 @@ class TestSearch:
         assert response.get_json() == {
             "query": "compressor",
             "count": 0,
-            "results": [],
+            "success": True,
+            "data": [],
         }
 
     def test_search_spans_documents_uploaded_by_different_users(
@@ -221,11 +240,9 @@ class TestSearch:
         response = client.get("/api/search?q=compressor", headers=auth_headers)
 
         assert response.status_code == 200
-        results = response.get_json()["results"]
+        results = response.get_json()["data"]
         assert len(results) == 1
-        assert results[0]["id"] == str(second_document_id)
-        assert results[0]["uploaded_by"] == str(second_user["_id"])
-        assert results[0]["uploaded_by_name"] == "Other User"
+        assert results[0]["document_id"] == str(second_document_id)
 
     def test_search_only_includes_processed_documents(
         self,
@@ -234,7 +251,7 @@ class TestSearch:
         registered_user,
     ):
         user = database.db.users.find_one({"email": registered_user["email"]})
-        insert_document(
+        processed_id = insert_document(
             title="Processed Pump Guide",
             uploaded_by=user["_id"],
             text_content="Processed pump instructions.",
@@ -252,8 +269,9 @@ class TestSearch:
         response = client.get("/api/search?q=pump", headers=auth_headers)
 
         assert response.status_code == 200
-        titles = [result["title"] for result in response.get_json()["results"]]
-        assert titles == ["Processed Pump Guide"]
+        results = response.get_json()["data"]
+        assert len(results) == 1
+        assert results[0]["document_id"] == str(processed_id)
 
     def test_search_rejects_invalid_limit(self, client, auth_headers):
         response = client.get("/api/search?q=pump&limit=zero", headers=auth_headers)

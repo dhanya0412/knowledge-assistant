@@ -51,6 +51,7 @@ def create_document_document(
     content_type,
     tags=None,
 ):
+    now = datetime.now(timezone.utc)
     return {
         "title": title,
         "original_filename": original_filename,
@@ -59,12 +60,17 @@ def create_document_document(
         "uploaded_by": ObjectId(uploaded_by),
         "file_size": file_size,
         "content_type": content_type,
-        "uploaded_at": datetime.now(timezone.utc),
+        "uploaded_at": now,
+        "upload_date": now,
         "tags": parse_tags(tags),
         "text_content": "",
         "keywords": [],
         "summary": "",
+        "chunks": [],
+        "word_count": 0,
+        "status": "pending",
         "processed": False,
+        "processed_at": None,
     }
 
 
@@ -78,10 +84,24 @@ def document_to_dict(document, include_filepath=True, include_content=True):
         "file_size": document["file_size"],
         "content_type": document["content_type"],
         "uploaded_at": document["uploaded_at"].isoformat(),
+        "upload_date": document.get(
+            "upload_date",
+            document["uploaded_at"],
+        ).isoformat(),
         "tags": document.get("tags", []),
         "keywords": document.get("keywords", []),
         "summary": document.get("summary", ""),
+        "word_count": document.get("word_count", 0),
+        "status": document.get(
+            "status",
+            "processed" if document.get("processed") else "pending",
+        ),
         "processed": document.get("processed", False),
+        "processed_at": (
+            document.get("processed_at").isoformat()
+            if document.get("processed_at")
+            else None
+        ),
     }
 
     if include_filepath:

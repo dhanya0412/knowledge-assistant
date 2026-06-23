@@ -1,10 +1,13 @@
 import os
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from flask import current_app
+from pymongo.errors import PyMongoError
 from werkzeug.utils import secure_filename
+import re
 
 import app.database as database
 from app.models.document import (
@@ -21,7 +24,9 @@ from app.services.parser import (
     UnsupportedFileTypeError,
     extract_text,
 )
-from app.services.preprocessor import clean_text
+from app.services.preprocessor import clean_document_text
+from app.services.preprocessor import sent_tokenize, preprocess_for_nlp
+from app.services.retrieval import chunk_text
 from app.services.summarizer import generate_summary
 
 
@@ -62,12 +67,36 @@ def _stored_filename(original_filename):
     return f"{uuid4().hex}.{extension}"
 
 
+def _build_chunks(text_content):
+    return [
+        {
+            "chunk_id": index,
+            "text": chunk,
+            "word_count": len(chunk.split()),
+        }
+        for index, chunk in enumerate(chunk_text(text_content), start=1)
+    ]
+
+
 def _process_document(filepath, original_filename):
     try:
         raw_text = extract_text(filepath, filename=original_filename)
-        text_content = clean_text(raw_text)
-        keywords = extract_keywords(text_content)
-        summary = generate_summary(text_content)
+        print("parser ok")
+        # Only light, lossless document cleaning happens before storage —
+        # text_content and chunks must preserve the original wording.
+        text_content = clean_document_text(raw_text)
+        print("clean ok")
+        chunks = _build_chunks(text_content)
+        print("chunks ok")
+        sentences = sent_tokenize(text_content)
+        print("sentences ok")
+        keywords = extract_keywords(text_content, sentences=sentences)
+        print("keywords ok")
+        summary = generate_summary(text_content, sentences=sentences)
+        print("summary ok")
+        # NLP-only normalization (tokenize/lowercase/lemmatize) is used
+        # solely to compute word_count; its output is never stored.
+        word_count = len(re.findall(r"\b\w+\b", text_content))
     except EmptyDocumentError as exc:
         raise DocumentError("no extractable text found") from exc
     except UnsupportedFileTypeError as exc:
@@ -89,9 +118,13 @@ def _process_document(filepath, original_filename):
 
     return {
         "text_content": text_content,
+        "chunks": chunks,
         "keywords": keywords,
         "summary": summary,
+        "word_count": word_count,
+        "status": "processed",
         "processed": True,
+        "processed_at": datetime.now(timezone.utc),
     }
 
 
@@ -107,6 +140,10 @@ def upload_document(user_id, file, title=None, tags=None):
 
     filepath = os.path.join(upload_folder, stored_filename)
     file_size = _file_size(file)
+    max_file_size = current_app.config.get("MAX_CONTENT_LENGTH")
+    if max_file_size and file_size > max_file_size:
+        raise DocumentError("file exceeds maximum allowed size", status_code=413)
+
     file.save(filepath)
 
     try:
@@ -141,15 +178,33 @@ def upload_document(user_id, file, title=None, tags=None):
     )
     document.update(processed_fields)
 
-    result = database.db.documents.insert_one(document)
+    try:
+        result = database.db.documents.insert_one(document)
+    except PyMongoError as exc:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise DocumentError(
+            "document could not be saved",
+            status_code=500,
+        ) from exc
+
     document["_id"] = result.inserted_id
     return document_to_dict(document)
 
 
 def list_documents(user_id):
-    documents = database.db.documents.find(
-        {"uploaded_by": ObjectId(user_id)}
-    ).sort("uploaded_at", -1)
+    try:
+        documents = database.db.documents.find(
+            {
+                "uploaded_by": ObjectId(user_id),
+                "status": "processed",
+            }
+        ).sort("uploaded_at", -1)
+    except PyMongoError as exc:
+        raise DocumentError(
+            "documents could not be loaded",
+            status_code=500,
+        ) from exc
 
     return [
         document_to_dict(
@@ -162,10 +217,16 @@ def list_documents(user_id):
 
 
 def get_document(user_id, document_id):
-    document = database.db.documents.find_one({
-        "_id": _object_id(document_id),
-        "uploaded_by": ObjectId(user_id),
-    })
+    try:
+        document = database.db.documents.find_one({
+            "_id": _object_id(document_id),
+            "uploaded_by": ObjectId(user_id),
+        })
+    except PyMongoError as exc:
+        raise DocumentError(
+            "document could not be loaded",
+            status_code=500,
+        ) from exc
 
     if not document:
         raise DocumentError("document not found", status_code=404)
@@ -174,10 +235,16 @@ def get_document(user_id, document_id):
 
 
 def get_document_summary(user_id, document_id):
-    document = database.db.documents.find_one({
-        "_id": _object_id(document_id),
-        "processed": True,
-    })
+    try:
+        document = database.db.documents.find_one({
+            "_id": _object_id(document_id),
+            "processed": True,
+        })
+    except PyMongoError as exc:
+        raise DocumentError(
+            "document could not be loaded",
+            status_code=500,
+        ) from exc
 
     if not document:
         raise DocumentError("document not found", status_code=404)
@@ -190,10 +257,16 @@ def get_document_summary(user_id, document_id):
 
 
 def delete_document(user_id, document_id):
-    document = database.db.documents.find_one({
-        "_id": _object_id(document_id),
-        "uploaded_by": ObjectId(user_id),
-    })
+    try:
+        document = database.db.documents.find_one({
+            "_id": _object_id(document_id),
+            "uploaded_by": ObjectId(user_id),
+        })
+    except PyMongoError as exc:
+        raise DocumentError(
+            "document could not be loaded",
+            status_code=500,
+        ) from exc
 
     if not document:
         raise DocumentError("document not found", status_code=404)
@@ -202,9 +275,15 @@ def delete_document(user_id, document_id):
     if filepath and os.path.exists(filepath):
         os.remove(filepath)
 
-    database.db.documents.delete_one({
-        "_id": document["_id"],
-        "uploaded_by": ObjectId(user_id),
-    })
+    try:
+        database.db.documents.delete_one({
+            "_id": document["_id"],
+            "uploaded_by": ObjectId(user_id),
+        })
+    except PyMongoError as exc:
+        raise DocumentError(
+            "document could not be deleted",
+            status_code=500,
+        ) from exc
 
     return {"message": "document deleted successfully"}

@@ -30,6 +30,13 @@ def upload():
     return jsonify({
         "message": "document uploaded successfully",
         "document": document,
+        "success": True,
+        "data": {
+            "document_id": document["id"],
+            "filename": document["filename"],
+            "word_count": document.get("word_count", 0),
+            "keywords": document.get("keywords", []),
+        },
     }), 201
 
 
@@ -41,7 +48,21 @@ def list_user_documents():
     except DocumentError as exc:
         return jsonify({"error": exc.message}), exc.status_code
 
-    return jsonify({"documents": documents}), 200
+    return jsonify({
+        "documents": documents,
+        "success": True,
+        "data": [
+            {
+                "document_id": document["id"],
+                "filename": document["filename"],
+                "upload_date": document.get("upload_date"),
+                "word_count": document.get("word_count", 0),
+                "status": document.get("status", "processed"),
+            }
+            for document in documents
+        ],
+        "total": len(documents),
+    }), 200
 
 
 @documents_bp.route("/<document_id>", methods=["GET"])
@@ -63,7 +84,15 @@ def get_user_document_summary(document_id):
     except DocumentError as exc:
         return jsonify({"error": exc.message}), exc.status_code
 
-    return jsonify(summary), 200
+    return jsonify({
+        **summary,
+        "success": True,
+        "data": {
+            "document_id": summary["id"],
+            "summary": summary.get("summary", ""),
+            "keywords": summary.get("keywords", []),
+        },
+    }), 200
 
 
 @documents_bp.route("/<document_id>", methods=["DELETE"])

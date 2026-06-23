@@ -55,6 +55,12 @@ class TestDocumentUpload:
         assert stored_document["text_content"] == document["text_content"]
         assert stored_document["keywords"] == document["keywords"]
         assert stored_document["summary"] == document["summary"]
+        assert stored_document["chunks"]
+        for chunk in stored_document["chunks"]:
+            assert "chunk_id" in chunk
+            assert "text" in chunk
+            assert "word_count" in chunk
+            assert chunk["word_count"] == len(chunk["text"].split())
 
     def test_upload_cleans_text_before_insert(self, client, auth_headers):
         response = upload_file(
@@ -70,7 +76,7 @@ class TestDocumentUpload:
         assert response.status_code == 201
         document = response.get_json()["document"]
         assert document["text_content"] == (
-            "Pump manual\n\n"
+            "Pump manual "
             "Check pressure before startup. Pump pressure requires inspection."
         )
         assert document["processed"] is True

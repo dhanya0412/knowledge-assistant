@@ -20,3 +20,4 @@ pypdf
 python-docx
 scikit-learn
 numpy
+nltk

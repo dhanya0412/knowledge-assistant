@@ -1,14 +1,13 @@
-import re
+from app.services.preprocessor import clean_document_text
+from app.services.preprocessor import sent_tokenize
 
-from app.services.preprocessor import clean_text
 
-
-def generate_summary(text, max_sentences=2):
-    cleaned_text = clean_text(text)
+def generate_summary(text, max_sentences=5, sentences=None):
+    cleaned_text = clean_document_text(text)
     if not cleaned_text:
         raise ValueError("text is required for summarization")
 
-    sentences = _split_sentences(cleaned_text)
+    sentences = sentences or sent_tokenize(cleaned_text)
     if not sentences:
         raise ValueError("text is required for summarization")
 
@@ -40,12 +39,3 @@ def generate_summary(text, max_sentences=2):
     selected_indexes = sorted(ranked_indexes[:max_sentences])
 
     return " ".join(sentences[index] for index in selected_indexes)
-
-
-def _split_sentences(text):
-    normalized = re.sub(r"\s+", " ", text).strip()
-    return [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+", normalized)
-        if sentence.strip()
-    ]

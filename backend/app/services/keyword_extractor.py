@@ -1,8 +1,8 @@
-from app.services.preprocessor import clean_text
+from app.services.preprocessor import clean_document_text, sent_tokenize
 
 
-def extract_keywords(text, top_n=10):
-    cleaned_text = clean_text(text)
+def extract_keywords(text, top_n=10, sentences=None):
+    cleaned_text = clean_document_text(text)
     if not cleaned_text:
         raise ValueError("text is required for keyword extraction")
 
@@ -14,20 +14,20 @@ def extract_keywords(text, top_n=10):
     except ImportError as exc:
         raise RuntimeError("scikit-learn dependency is not installed") from exc
 
-    vectorizer = TfidfVectorizer(
-        stop_words="english",
-        ngram_range=(1, 2),
-        lowercase=True,
-    )
+    sentences = sentences or sent_tokenize(cleaned_text)
+    if not sentences:
+        return []
+
+    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
 
     try:
-        matrix = vectorizer.fit_transform([cleaned_text])
+        matrix = vectorizer.fit_transform(sentences)
     except ValueError as exc:
         if "empty vocabulary" in str(exc):
             return []
         raise
 
-    scores = matrix.toarray()[0]
+    scores = matrix.sum(axis=0).A1
     terms = vectorizer.get_feature_names_out()
     ranked_terms = sorted(
         zip(terms, scores),
