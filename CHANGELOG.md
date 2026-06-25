@@ -10,16 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Frontend integration
 - Docker deployment
 
-## [0.6.0] - 2026-06-19
+## [0.7.0] - 2026-06-25
 
 ### Added
-- Corpus-wide `GET /api/search` endpoint for searching processed documents
-- TF-IDF and cosine-similarity ranking over document title, keywords, and extracted text
-- Search result responses with title, keywords, uploader, upload timestamp, and relevance score
-- Search integration tests covering authentication, ranking, processed-only filtering, corpus-wide access, and response safety
+- `POST /api/ask` endpoint for question answering over the document corpus
+- Chunk-based document retrieval using stored document chunks
+- Two-stage TF-IDF retrieval pipeline:
+  - Chunk ranking using cosine similarity
+  - Sentence-level ranking within the top retrieved chunks
+- Confidence score and source metadata (document and chunk ID) returned with answers
+- Comprehensive Q&A integration tests covering authentication, question validation, corpus-wide retrieval, processed-document filtering, and answer extraction
 
 ### Changed
-- `GET /api/documents/<id>/summary` is corpus-wide for authenticated users and returns generated keywords with the summary
+- Documents now store precomputed chunks during upload to avoid regenerating chunks during search and Q&A
+- Refactored text preprocessing to preserve original document wording in stored `text_content` and chunks while keeping NLP normalization internal
+- Search and Q&A now reuse the common retrieval pipeline for chunk ranking
 
 
 ## [0.5.1] - 2026-06-17

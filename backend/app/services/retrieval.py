@@ -77,6 +77,26 @@ def chunks_from_documents(documents):
     return chunks
 
 
+def chunks_from_stored_documents(documents):
+    chunks = []
+    for document in documents:
+        document_id = str(document["_id"])
+        filename = document.get("original_filename") or document.get("filename", "")
+        for stored_chunk in document.get("chunks", []):
+            chunks.append(Chunk(
+                document_id=document_id,
+                filename=filename,
+                text=stored_chunk["text"],
+                chunk_id=stored_chunk["chunk_id"],
+            ))
+
+    return chunks
+
+
+def rank_stored_document_chunks(query, documents, limit):
+    return rank_chunks(query, chunks_from_stored_documents(documents), limit)
+
+
 def rank_chunks(query, chunks, limit):
     if not chunks:
         return []

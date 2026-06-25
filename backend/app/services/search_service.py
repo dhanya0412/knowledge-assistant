@@ -2,7 +2,7 @@ from bson import ObjectId
 from pymongo.errors import PyMongoError
 
 import app.database as database
-from app.services.retrieval import Chunk, rank_chunks
+from app.services.retrieval import rank_stored_document_chunks
 
 
 DEFAULT_LIMIT = 5
@@ -105,28 +105,13 @@ def _fetch_searchable_documents():
 
 def _rank_chunks(query, documents, limit):
     try:
-        return rank_chunks(query, _chunks_from_stored_documents(documents), limit)
+        return rank_stored_document_chunks(query, documents, limit)
     except RuntimeError as exc:
         message = str(exc)
         status_code = 500
         if message not in {"search failed", "search service unavailable"}:
             message = "search failed"
         raise SearchError(message, status_code=status_code) from exc
-
-
-def _chunks_from_stored_documents(documents):
-    chunks = []
-    for document in documents:
-        document_id = str(document["_id"])
-        filename = document.get("original_filename") or document.get("filename", "")
-        for stored_chunk in document.get("chunks", []):
-            chunks.append(Chunk(
-                document_id=document_id,
-                filename=filename,
-                text=stored_chunk["text"],
-                chunk_id=stored_chunk["chunk_id"],
-            ))
-    return chunks
 
 
 def _fetch_uploaders(ranked_documents):
