@@ -4,6 +4,9 @@ import re
 
 DEFAULT_CHUNK_WORDS = 120
 DEFAULT_CHUNK_OVERLAP = 30
+TFIDF_STOP_WORDS = "english"
+TFIDF_NGRAM_RANGE = (1, 2)
+TFIDF_NORM = "l2"
 
 
 @dataclass(frozen=True)
@@ -102,13 +105,12 @@ def rank_chunks(query, chunks, limit):
         return []
 
     try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.metrics.pairwise import cosine_similarity
     except ImportError as exc:
         raise RuntimeError("search service unavailable") from exc
 
     corpus = [query] + [chunk.text for chunk in chunks]
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+    vectorizer = build_tfidf_vectorizer()
 
     try:
         matrix = vectorizer.fit_transform(corpus)
@@ -128,3 +130,13 @@ def rank_chunks(query, chunks, limit):
         for chunk, score in ranked[:limit]
         if score > 0
     ]
+
+
+def build_tfidf_vectorizer():
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    return TfidfVectorizer(
+        stop_words=TFIDF_STOP_WORDS,
+        ngram_range=TFIDF_NGRAM_RANGE,
+        norm=TFIDF_NORM,
+    )
