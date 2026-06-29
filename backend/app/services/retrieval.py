@@ -1,12 +1,18 @@
 from dataclasses import dataclass
 import re
 
+from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+
 
 DEFAULT_CHUNK_WORDS = 120
 DEFAULT_CHUNK_OVERLAP = 30
-TFIDF_STOP_WORDS = "english"
+TFIDF_STOP_WORDS = frozenset(ENGLISH_STOP_WORDS)
 TFIDF_NGRAM_RANGE = (1, 2)
 TFIDF_NORM = "l2"
+TFIDF_TOKEN_PATTERN = re.compile(r"(?u)\b\w\w+\b")
+
+_STEMMER = PorterStemmer()
 
 
 @dataclass(frozen=True)
@@ -136,7 +142,20 @@ def build_tfidf_vectorizer():
     from sklearn.feature_extraction.text import TfidfVectorizer
 
     return TfidfVectorizer(
-        stop_words=TFIDF_STOP_WORDS,
+        # Stop words are filtered by the tokenizer before stemming. Passing a
+        # separately stemmed stop-word list makes sklearn stem those entries a
+        # second time and can leave inconsistent forms in the vocabulary.
+        tokenizer=_stem_tokenize,
+        token_pattern=None,
         ngram_range=TFIDF_NGRAM_RANGE,
         norm=TFIDF_NORM,
     )
+
+
+def _stem_tokenize(text):
+    """Tokenize and stem without requiring downloadable NLTK corpora."""
+    return [
+        _STEMMER.stem(token)
+        for token in TFIDF_TOKEN_PATTERN.findall(text.lower())
+        if token not in TFIDF_STOP_WORDS
+    ]

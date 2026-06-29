@@ -1,7 +1,136 @@
 from datetime import datetime, timezone
 
 import app.database as database
-from app.services.retrieval import chunk_text
+from app.services import qa_service
+from app.services.retrieval import Chunk, build_tfidf_vectorizer, chunk_text
+
+
+def test_tfidf_vectorizer_stems_terms_keeps_stopword_removal_and_uses_bigrams():
+    vectorizer = build_tfidf_vectorizer()
+    matrix = vectorizer.fit_transform([
+        "We operate cloud services",
+        "Operating cloud service",
+    ])
+    features = set(vectorizer.get_feature_names_out())
+
+    assert vectorizer.ngram_range == (1, 2)
+    assert "cloud servic" in features
+    assert "oper" in features
+    assert "we" not in features
+    assert matrix[0].multiply(matrix[1]).sum() > 0
+
+
+def test_question_classifier_recognizes_new_rule_based_types():
+    examples = {
+        "What are Microsoft's business segments?": qa_service.QUESTION_TYPE_LIST,
+        "How much revenue did Microsoft report?": qa_service.QUESTION_TYPE_NUMERIC,
+        "What was the operating income?": qa_service.QUESTION_TYPE_NUMERIC,
+        "What did the CEO say about security?": qa_service.QUESTION_TYPE_NARRATIVE,
+        "What are Microsoft's sustainability goals?": (
+            qa_service.QUESTION_TYPE_NARRATIVE
+        ),
+    }
+
+    for question, expected_type in examples.items():
+        assert qa_service._classify_question(question) == expected_type
+
+
+def test_numeric_scoring_prefers_the_sentence_with_a_numeric_value():
+    candidates = [
+        {
+            "sentence": "Revenue is recognized when control transfers.",
+            "sentence_index": 0,
+            "chunk_sentences": [],
+            "document": "annual-report.txt",
+            "chunk_id": 1,
+            "chunk_score": 0.5,
+            "is_chunk_start": True,
+        },
+        {
+            "sentence": "Revenue was $281,724 million.",
+            "sentence_index": 0,
+            "chunk_sentences": [],
+            "document": "annual-report.txt",
+            "chunk_id": 2,
+            "chunk_score": 0.5,
+            "is_chunk_start": True,
+        },
+    ]
+
+    best_candidate, _score = qa_service._rank_sentences(
+        "What was the revenue?",
+        candidates,
+    )
+
+    assert best_candidate["chunk_id"] == 2
+
+
+def test_list_context_collects_consecutive_list_items():
+    sentences = [
+        "Microsoft reports three business segments:",
+        "Productivity and Business Processes.",
+        "Intelligent Cloud.",
+        "More Personal Computing.",
+        "The company also reports corporate-level activity separately.",
+    ]
+    candidate = {
+        "sentence": sentences[0],
+        "sentence_index": 0,
+        "chunk_sentences": sentences,
+    }
+
+    answer = qa_service._answer_context(
+        "What are Microsoft's three business segments?",
+        candidate,
+    )
+
+    assert answer == " ".join(sentences[:4])
+
+    candidate["sentence"] = sentences[2]
+    candidate["sentence_index"] = 2
+    assert qa_service._answer_context(
+        "What are Microsoft's three business segments?",
+        candidate,
+    ) == " ".join(sentences[:4])
+
+
+def test_narrative_context_uses_sentence_window_until_next_heading():
+    sentences = [
+        "Shareholder Letter.",
+        "The CEO described security as a core responsibility.",
+        "The company will continue investing in cyber defense.",
+        "Financial Highlights.",
+        "Revenue increased during the year.",
+    ]
+    candidate = {
+        "sentence": sentences[1],
+        "sentence_index": 1,
+        "chunk_sentences": sentences,
+    }
+
+    answer = qa_service._answer_context(
+        "What did the CEO say about security?",
+        candidate,
+    )
+
+    assert answer == " ".join(sentences[:3])
+
+
+def test_retrieval_debug_output_can_be_disabled(monkeypatch, capsys):
+    ranked_chunks = [(
+        Chunk("document-id", "report.txt", "Risk Factors include cyber threats.", 81),
+        0.87,
+    )]
+    monkeypatch.setattr(qa_service, "RETRIEVAL_DEBUG_ENABLED", True)
+    qa_service._log_retrieval_debug("What risks are mentioned?", ranked_chunks)
+
+    output = capsys.readouterr().out
+    assert "Question:\nWhat risks are mentioned?" in output
+    assert "Chunk 81 Score 0.8700" in output
+
+    monkeypatch.setattr(qa_service, "RETRIEVAL_DEBUG_ENABLED", False)
+    qa_service._log_retrieval_debug("Hidden question", ranked_chunks)
+    assert capsys.readouterr().out == ""
 
 
 def _build_stored_chunks(text_content):
